@@ -1,0 +1,21 @@
+FROM maven:3.9.9-eclipse-temurin-21 AS builder
+
+WORKDIR /app
+
+# Install proto-commons first
+COPY proto-common/pom.xml proto-common/pom.xml
+COPY proto-common/src proto-common/src
+RUN cd proto-common && mvn clean install -DskipTests
+
+# Build patient-service
+COPY patient-service/pom.xml patient-service/pom.xml
+RUN cd patient-service && mvn dependency:go-offline -B
+COPY patient-service/src patient-service/src
+RUN cd patient-service && mvn clean package -DskipTests
+
+FROM eclipse-temurin:21-jre AS runner
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY --from=builder /app/patient-service/target/*.jar app.jar
+EXPOSE 4000
+ENTRYPOINT ["java", "-jar", "app.jar"]
