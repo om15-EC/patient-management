@@ -48,4 +48,13 @@ public class JwtUtil {
 
         return expiration.getTime() - System.currentTimeMillis();
     }
+
+    public String extractUserId(String token){
+        return Jwts.parser()
+                .verifyWith(getSigningKey())
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .getSubject();
+    }
 }

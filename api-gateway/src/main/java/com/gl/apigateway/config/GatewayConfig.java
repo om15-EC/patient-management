@@ -38,6 +38,10 @@ public class GatewayConfig {
 //                                .stripPrefix(1)
                                 .filter(jwtAuthenticationFilter))
                         .uri("lb://analytics-service"))
+                .route("auth-admin-route", r -> r
+                        .path("/api/admin/**")
+                        .filters(f -> f.filter(jwtAuthenticationFilter))
+                        .uri("lb://auth-service"))
                 .build();
     }
 }

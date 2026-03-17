@@ -47,5 +47,15 @@ public class JwtUtil {
                 .get("role", String.class);
     }
 
+    public long extractIssuedAt(String token) {
+        return Jwts.parser()
+                .verifyWith(getSigningKey())
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .getIssuedAt()
+                .getTime();
+    }
+
 
 }

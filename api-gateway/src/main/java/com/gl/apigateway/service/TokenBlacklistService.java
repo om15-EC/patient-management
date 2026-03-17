@@ -19,11 +19,27 @@ public class TokenBlacklistService {
     }
 
     private final static String BLACKLIST_PREFIX = "blacklist:";
+    private static final String USER_BLACKLIST_PREFIX = "user_blacklist:";
 
     public Mono<Boolean> isTokenBlackListed(String token){
         String key = BLACKLIST_PREFIX + token;
         return redisTemplate.hasKey(key)
                 .defaultIfEmpty(false)
                 .doOnNext(result -> log.info("Redis hasKey({}) = {}", key, result));
+    }
+
+    public Mono<Boolean> isUserBlacklisted(String userId, long tokenIssuedAt) {
+        String key = USER_BLACKLIST_PREFIX + userId;
+        return redisTemplate.opsForValue().get(key)
+                .defaultIfEmpty("0")
+                .map(timestamp -> {
+                    long blacklistTime = Long.parseLong(timestamp);
+                    // token issued BEFORE blacklist timestamp → invalid
+                    boolean blacklisted = blacklistTime > 0
+                            && tokenIssuedAt < blacklistTime;
+                    log.info("User blacklist check userId={} blacklisted={}",
+                            userId, blacklisted);
+                    return blacklisted;
+                });
     }
 }
