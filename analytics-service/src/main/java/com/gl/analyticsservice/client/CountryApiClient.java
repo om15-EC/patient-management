@@ -1,6 +1,7 @@
 package com.gl.analyticsservice.client;
 
 import com.gl.analyticsservice.dto.CountryInfo;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -21,11 +22,11 @@ public class CountryApiClient {
         this.webClient = webClientBuilder.baseUrl(baseUrl).build();
     }
 
+    @CircuitBreaker(name = "countriesApi", fallbackMethod = "getCountryFallback")
     public CountryInfo getCountry(String country) {
         if (country == null || country.isBlank()) {
             return CountryInfo.empty();
         }
-        try {
             List<Map> response = webClient.get()
                     .uri("/name/{country}?fullText=false", country)
                     .retrieve()
@@ -50,11 +51,11 @@ public class CountryApiClient {
                     timezones.isEmpty() ? "unknown" : timezones.get(0),
                     currencies.isEmpty() ? "unknown" : currencies.keySet().iterator().next()
             );
+    }
 
-        } catch (Exception e) {
-            log.warn("Country API call failed for {}: {}", country, e.getMessage());
-            return CountryInfo.empty();
-        }
+    public CountryInfo getCountryFallback(String country, Throwable t){
+        log.warn("RestCountries API circuit open for {}: {}", country, t.getMessage());
+        return CountryInfo.empty();
     }
 
 
