@@ -37,4 +37,15 @@ public class JwtUtil {
     public long getExpiration(){
         return expiration / 1000;
     }
+
+    public long getRemainingExpiration(String token){
+        Date expiration = Jwts.parser()
+                .verifyWith(getSigningKey())
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .getExpiration();
+
+        return expiration.getTime() - System.currentTimeMillis();
+    }
 }

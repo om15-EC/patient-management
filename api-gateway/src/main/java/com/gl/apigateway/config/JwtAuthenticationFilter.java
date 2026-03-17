@@ -1,5 +1,6 @@
 package com.gl.apigateway.config;
 
+import com.gl.apigateway.service.TokenBlacklistService;
 import com.gl.apigateway.util.JwtUtil;
 import io.jsonwebtoken.ExpiredJwtException;
 import org.slf4j.Logger;
@@ -16,9 +17,11 @@ public class JwtAuthenticationFilter implements GatewayFilter {
 
     private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
     private final JwtUtil jwtUtil;
+    private final TokenBlacklistService tokenBlacklistService;
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil) {
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, TokenBlacklistService tokenBlacklistService) {
         this.jwtUtil = jwtUtil;
+        this.tokenBlacklistService = tokenBlacklistService;
     }
 
     @Override
@@ -42,7 +45,22 @@ public class JwtAuthenticationFilter implements GatewayFilter {
 
         try {
             jwtUtil.validateToken(token);
+        }catch (ExpiredJwtException e) {
+            log.warn("Jwt token expired: {}", e.getMessage());
+            return unauthorizedResponse(exchange);
+        }catch (Exception e) {
+            log.warn("JWT validation failed {}", e.getMessage());
+            return unauthorizedResponse(exchange);
+        }
 
+        return tokenBlacklistService.isTokenBlackListed(token)
+                .defaultIfEmpty(false)
+                .flatMap(isBlackListed -> {
+                    log.info("Token blacklist check: {}", isBlackListed);
+                    if(isBlackListed){
+                        log.warn("Blacklisted token used for path: {}", path);
+                        return unauthorizedResponse(exchange);
+                }
 //            extracting user info and passing it as header to downstream services
             String email = jwtUtil.extractEmail(token);
             String role = jwtUtil.extractRoles(token);
@@ -60,14 +78,7 @@ public class JwtAuthenticationFilter implements GatewayFilter {
             log.info("Access granted for user: {} with role {} on {} {}", email, role, method, path);
             return chain.filter(modifiedExchange);
 
-        }catch (ExpiredJwtException e){
-            log.warn("JWT token expired: {}", e.getMessage());
-            return unauthorizedResponse(exchange);
-        } catch (Exception e){
-            log.warn("JWT validation failed: {}", e.getMessage());
-            return unauthorizedResponse(exchange);
-        }
-
+        });
     }
 
 
