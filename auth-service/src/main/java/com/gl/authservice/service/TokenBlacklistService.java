@@ -36,16 +36,17 @@ public class TokenBlacklistService {
         return redisTemplate.hasKey(key);
     }
 
-    public void blacklistUser(String userId){
-        String key = USER_BLACKLIST_PREFIX + userId;
-        long ttl = 24 * 60 * 60 * 1000L;
+    public void blacklistUser(String email){
+        String key = USER_BLACKLIST_PREFIX + email;
+        long ttl = 24 * 60 * 60 * 1000L; // 24hrs
         redisTemplate.opsForValue().set(
                 key,
-                String.valueOf(System.currentTimeMillis()),
-                ttl,
-                TimeUnit.MILLISECONDS
+                String.valueOf(System.currentTimeMillis())
+//                ttl,
+//                TimeUnit.MILLISECONDS // removing this because once user is disabled
+//                no need to add them again in 24hrs automatically.
         );
-        log.info("User {} force-logged out by admin", userId);
+        log.info("User {} force-logged out by admin", email);
     }
 
     public boolean isUserBlacklisted(String userId) {
