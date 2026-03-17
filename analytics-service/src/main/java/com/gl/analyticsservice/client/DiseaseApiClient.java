@@ -1,6 +1,7 @@
 package com.gl.analyticsservice.client;
 
 import com.gl.analyticsservice.dto.DiseaseInfo;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -20,11 +21,11 @@ public class DiseaseApiClient {
                 .build();
     }
 
+    @CircuitBreaker(name = "wikipediaApi", fallbackMethod = "getDiseaseFallback")
     public DiseaseInfo getDisease(String diagnosis){
         if(diagnosis == null || diagnosis.isBlank()){
             return DiseaseInfo.empty();
         }
-        try {
             Map response = webClient.get()
                     .uri("/page/summary/{disease}", diagnosis)
                     .retrieve()
@@ -39,10 +40,12 @@ public class DiseaseApiClient {
                     (String) response.getOrDefault("name", "unknown"),
                     (String) response.getOrDefault("description", "")
             );
-        }catch (Exception e){
-            log.warn("Disease API call failed for {}: {}", diagnosis, e.getMessage());
-            return DiseaseInfo.empty();
-        }
+
+    }
+
+    public DiseaseInfo getDiseaseFallback(String diagnosis, Throwable t){
+        log.warn("Wikipedia API circuit open for{} : {}", diagnosis, t.getMessage());
+        return DiseaseInfo.empty();
     }
 
 
