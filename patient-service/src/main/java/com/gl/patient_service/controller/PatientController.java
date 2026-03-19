@@ -1,29 +1,40 @@
 package com.gl.patient_service.controller;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gl.patient_service.dto.PatientRequestDTO;
 import com.gl.patient_service.dto.PatientResponseDTO;
 import com.gl.patient_service.dto.validators.CreatePatientValidationGroup;
+import com.gl.patient_service.service.IdempotencyService;
 import com.gl.patient_service.service.PatientService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.groups.Default;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.coyote.BadRequestException;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
+@Slf4j
 @RestController
 @RequestMapping("/patients")
 @Tag(name = "Patient", description = "API for managing Patients")
 public class PatientController {
 
     private final PatientService patientService;
+    private final IdempotencyService idempotencyService;
+    private final ObjectMapper objectMapper;
 
-    public PatientController(PatientService patientService) {
+    public PatientController(PatientService patientService, IdempotencyService idempotencyService, ObjectMapper objectMapper) {
         this.patientService = patientService;
+        this.idempotencyService = idempotencyService;
+        this.objectMapper = objectMapper;
     }
 
     @GetMapping
@@ -37,10 +48,30 @@ public class PatientController {
     @PostMapping
     @Operation(summary = "Create a new Patient")
     public ResponseEntity<PatientResponseDTO> createPatient(@Validated({Default.class, CreatePatientValidationGroup.class})
-                                                                @RequestBody PatientRequestDTO patientRequestDTO) {
-        PatientResponseDTO patient = patientService.createPatient(patientRequestDTO);
+                                                                @RequestBody PatientRequestDTO patientRequestDTO,
+                                                            @RequestHeader(value = "Idempotency-Key", required = false)
+                                                            String idempotencyKey) throws JsonProcessingException {
+        if(idempotencyKey != null && !idempotencyKey.isBlank()){
+            Optional<String> cachedResponse =
+                    idempotencyService.getExistingResponse(idempotencyKey);
 
-        return ResponseEntity.ok().body(patient);
+            if(cachedResponse.isPresent()){
+                PatientResponseDTO responseDTO = objectMapper.readValue(
+                        cachedResponse.get(), PatientResponseDTO.class);
+                log.info("Returning cached response for idempotency key: {}",
+                        idempotencyKey);
+                return ResponseEntity.status(HttpStatus.CREATED).body(responseDTO);
+            }
+        }
+
+        PatientResponseDTO patient = patientService.createPatient(patientRequestDTO);
+        if(idempotencyKey != null && !idempotencyKey.isBlank()){
+            idempotencyService.saveResponse(
+                    idempotencyKey,
+                    objectMapper.writeValueAsString(patient)
+            );
+        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(patient);
     }
 
     @PutMapping("/{id}")
