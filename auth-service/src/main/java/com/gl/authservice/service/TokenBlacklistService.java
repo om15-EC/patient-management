@@ -17,7 +17,10 @@ public class TokenBlacklistService {
 
     private static final String BLACKLIST_PREFIX = "blacklist:";
     private static final String USER_BLACKLIST_PREFIX = "user_blacklist:";
+    private static final String REFRESH_TOKEN_PREFIX = "refresh_token:";
     private final StringHttpMessageConverter stringHttpMessageConverter;
+
+    private static final long REFRESH_TTL_DAYS = 7;
 
     public void blackListToken(String token, long expirationMs){
         String key = BLACKLIST_PREFIX + token;
@@ -58,5 +61,28 @@ public class TokenBlacklistService {
         String key = USER_BLACKLIST_PREFIX + userId;
         String value = redisTemplate.opsForValue().get(key);
         return value != null ? Long.parseLong(value) : 0L;
+    }
+
+    public void storeRefreshToken(String email, String refreshToken) {
+        String key = REFRESH_TOKEN_PREFIX + email;
+        redisTemplate.opsForValue().set(
+                key,
+                refreshToken,
+                REFRESH_TTL_DAYS,
+                TimeUnit.DAYS
+        );
+        log.info("Refresh token stored for user: {} ", email);
+    }
+
+    public boolean isRefreshTokenValid(String email, String refreshToken) {
+        String key = REFRESH_TOKEN_PREFIX + email;
+        String storedToken = redisTemplate.opsForValue().get(key);
+        return refreshToken.equals(storedToken);
+    }
+
+    public void deleteRefreshToken(String email) {
+        String key = REFRESH_TOKEN_PREFIX + email;
+        redisTemplate.delete(key);
+        log.info("Refresh token deleted for user: {}", email);
     }
 }

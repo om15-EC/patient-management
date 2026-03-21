@@ -20,6 +20,10 @@ public class JwtUtil {
     @Value("${jwt.expiration:86400000}")
     private long expiration;
 
+    private static final long REFRESH_EXPIRATION = 7 * 24 * 60 * 60 * 1000L;
+
+    private static final long ACCESS_EXPIRATION = 15 * 60 * 1000L;
+
     private SecretKey getSigningKey(){
         return Keys.hmacShaKeyFor(Decoders.BASE64.decode(secretKey));
     }
@@ -34,6 +38,28 @@ public class JwtUtil {
                 .signWith(getSigningKey())
                 .compact();
     }
+
+    public String generateAccessToken(String email, String role){
+        return Jwts.builder()
+                .subject(email)
+                .claim("role", role)
+                .claim("type","ACCESS")
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + ACCESS_EXPIRATION))
+                .signWith(getSigningKey())
+                .compact();
+    }
+
+    public String generateRefreshToken(String email){
+        return Jwts.builder()
+                .subject(email)
+                .claim("type", "REFRESH")
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + REFRESH_EXPIRATION))
+                .signWith(getSigningKey())
+                .compact();
+    }
+
     public long getExpiration(){
         return expiration / 1000;
     }
@@ -50,6 +76,31 @@ public class JwtUtil {
     }
 
     public String extractUserId(String token){
+        return Jwts.parser()
+                .verifyWith(getSigningKey())
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .getSubject();
+    }
+
+    public String extractClaim(String token, String claimName) {
+        return Jwts.parser()
+                .verifyWith(getSigningKey())
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .get(claimName, String.class);
+    }
+
+    public void validateToken(String token) {
+        Jwts.parser()
+                .verifyWith(getSigningKey())
+                .build()
+                .parseSignedClaims(token);
+    }
+
+    public String extractEmail(String token) {
         return Jwts.parser()
                 .verifyWith(getSigningKey())
                 .build()

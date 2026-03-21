@@ -77,10 +77,14 @@ public class AuthService {
             throw new UserDisabledException("user account is disabled");
         }
 
-        String token = jwtUtil.generateToken(user.getEmail(), user.getRole().name());
+        String accessToken = jwtUtil.generateAccessToken(user.getEmail(), user.getRole().name());
+        String refreshToken = jwtUtil.generateRefreshToken(user.getEmail());
+//        String token = jwtUtil.generateToken(user.getEmail(), user.getRole().name());
         long expiresIn = jwtUtil.getExpiration();
         String role = user.getRole().name();
 
-        return LoginResponseDTO.of(token,expiresIn,role);
+        tokenBlacklistService.storeRefreshToken(user.getEmail(),refreshToken);
+
+        return LoginResponseDTO.of(accessToken,refreshToken, expiresIn, role);
     }
 }
