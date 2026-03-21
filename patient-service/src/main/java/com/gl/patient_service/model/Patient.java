@@ -41,5 +41,9 @@ public class Patient {
     @Column
     private String country;
 
+    @Column(nullable = false)
+    @Enumerated(EnumType.STRING)
+    private PatientStatus status = PatientStatus.PENDING;
+
 
 }
