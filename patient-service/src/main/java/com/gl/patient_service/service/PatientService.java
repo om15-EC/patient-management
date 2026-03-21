@@ -9,6 +9,7 @@ import com.gl.patient_service.kafka.KafkaProducer;
 import com.gl.patient_service.mapper.PatientMapper;
 import com.gl.patient_service.model.Patient;
 import com.gl.patient_service.repository.PatientRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.coyote.BadRequestException;
 import org.springframework.stereotype.Service;
 
@@ -17,6 +18,7 @@ import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 public class PatientService {
 
@@ -41,13 +43,16 @@ public class PatientService {
             throw new EmailAlreadyExistException("A patient of this email already exist " + patientRequestDTO.getEmail());
         }
         Patient newPatient = patientRepository.save(PatientMapper.toModel(patientRequestDTO));
+        log.info("patient saved with PENDING status: {}", newPatient.getId());
 
-        billingServiceGrpcClient.createBillingAccount(
-                newPatient.getId().toString(),
-                newPatient.getName(),
-                newPatient.getEmail());
+//        billingServiceGrpcClient.createBillingAccount(
+//                newPatient.getId().toString(),
+//                newPatient.getName(),
+//                newPatient.getEmail());
 
+//      Publish to Kafka — billing-service will pick it up
         kafkaProducer.sendEvent(newPatient);
+        log.info("Patient created event published for: {}", newPatient.getId());
 
         return PatientMapper.toDTO(newPatient);
     }
