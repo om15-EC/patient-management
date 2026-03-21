@@ -4,6 +4,10 @@ import com.gl.authservice.dto.LoginRequestDTO;
 import com.gl.authservice.dto.LoginResponseDTO;
 import com.gl.authservice.dto.RegisterRequestDTO;
 import com.gl.authservice.dto.RegisterResponseDTO;
+import com.gl.authservice.exception.InvalidCredentialsException;
+import com.gl.authservice.exception.UserDisabledException;
+import com.gl.authservice.model.User;
+import com.gl.authservice.repository.UserRepository;
 import com.gl.authservice.service.AuthService;
 import com.gl.authservice.service.TokenBlacklistService;
 import com.gl.authservice.util.JwtUtil;
@@ -25,6 +29,7 @@ public class AuthController {
     private final AuthService authService;
     private final JwtUtil jwtUtil;
     private final TokenBlacklistService tokenBlacklistService;
+    private final UserRepository userRepository;
 
 
     @Operation(summary = "Register a new user")
@@ -49,13 +54,59 @@ public class AuthController {
     @Operation(summary = "Logout and blacklist token")
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(
-            @RequestHeader("Authorization") String authHeader){
+            @RequestHeader("Authorization") String authHeader,
+            @RequestHeader(value = "Refresh-Token", required = false) String refreshToken) {
         if(authHeader != null && authHeader.startsWith("Bearer")){
             String token = authHeader.substring(7);
             long expiration = jwtUtil.getRemainingExpiration(token);
             tokenBlacklistService.blackListToken(token,expiration);
+
+            String email = jwtUtil.extractEmail(token);
+            tokenBlacklistService.deleteRefreshToken(email);
+
+            if(refreshToken != null){
+                long refreshExpiration = jwtUtil.getRemainingExpiration(refreshToken);
+                tokenBlacklistService.blackListToken(refreshToken,refreshExpiration);
+            }
             log.info("User logged out successfully");
         }
         return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Refresh access token")
+    @PostMapping("/refresh")
+    public ResponseEntity<LoginResponseDTO> refresh(
+            @RequestHeader("Refresh-Token") String refreshToken) {
+
+        jwtUtil.validateToken(refreshToken);
+
+        // check it's a refresh token not access token
+        String type = jwtUtil.extractClaim(refreshToken, "type");
+        if (!"REFRESH".equals(type)) {
+            throw new InvalidCredentialsException("Invalid refresh token type");
+        }
+
+        // extract email and validate against Redis
+        String email = jwtUtil.extractEmail(refreshToken);
+        if (!tokenBlacklistService.isRefreshTokenValid(email, refreshToken)) {
+            throw new InvalidCredentialsException("Refresh token is invalid or expired");
+        }
+
+        // get user role from DB
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new InvalidCredentialsException("User not found"));
+
+        if (!user.isEnabled()) {
+            throw new UserDisabledException("User account is disabled");
+        }
+
+        // generate new access token only
+        String newAccessToken = jwtUtil.generateAccessToken(email, user.getRole().name());
+        long expiresIn = jwtUtil.getExpiration();
+
+        log.info("Access token refreshed for user: {}", email);
+        return ResponseEntity.ok(
+                LoginResponseDTO.of(newAccessToken, refreshToken, expiresIn, user.getRole().name())
+        );
     }
 }
