@@ -11,6 +11,8 @@ import com.gl.patient_service.model.Patient;
 import com.gl.patient_service.repository.PatientRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.coyote.BadRequestException;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -32,12 +34,22 @@ public class PatientService {
         this.kafkaProducer = kafkaProducer;
     }
 
+    @Cacheable(value = "patients", key = "'all'")
     public List<PatientResponseDTO> getPatients(){
         List<Patient> patients = patientRepository.findAll();
         return patients.stream()
                 .map(PatientMapper::toDTO).toList();
     }
 
+    @Cacheable(value = "patient", key = "#id")
+    public PatientResponseDTO getPatientById(UUID id) {
+        log.info("Cache miss — fetching patient {} from DB", id);
+        return patientRepository.findById(id)
+                .map(PatientMapper::toDTO)
+                .orElseThrow(() -> new PatientNotFoundById("Patient not found: " + id));
+    }
+
+    @CacheEvict(value = {"patients","patient"}, allEntries = true)
     public PatientResponseDTO createPatient(PatientRequestDTO patientRequestDTO){
         if(patientRepository.existsByEmail(patientRequestDTO.getEmail())){
             throw new EmailAlreadyExistException("A patient of this email already exist " + patientRequestDTO.getEmail());
@@ -57,6 +69,7 @@ public class PatientService {
         return PatientMapper.toDTO(newPatient);
     }
 
+    @CacheEvict(value = {"patients","patient"}, allEntries = true)
     public PatientResponseDTO updatePatient(UUID id, PatientRequestDTO patientRequestDTO){
         Patient patient = patientRepository.findById(id)
                 .orElseThrow(() -> new PatientNotFoundById("patient not found with id" + id));
@@ -76,6 +89,7 @@ public class PatientService {
         return PatientMapper.toDTO(updatedPatient);
     }
 
+    @CacheEvict(value = {"patients","patient"}, allEntries = true)
     public PatientResponseDTO patchPatient(UUID id, PatientRequestDTO patientRequestDTO) throws BadRequestException {
         Patient patient = patientRepository.findById(id)
                 .orElseThrow(() -> new PatientNotFoundById("patient not found with id" + id));
@@ -115,6 +129,7 @@ public class PatientService {
         return PatientMapper.toDTO(save);
     }
 
+    @CacheEvict(value = {"patients","patient"}, allEntries = true)
     public void deletePatient(UUID id){
         patientRepository.deleteById(id);
     }

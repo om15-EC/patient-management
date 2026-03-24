@@ -1,11 +1,11 @@
 package com.gl.patient_service.dto;
 
 
+import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 
-@Getter
-@Setter
+@Data
 public class PatientResponseDTO {
 
     private String id;
