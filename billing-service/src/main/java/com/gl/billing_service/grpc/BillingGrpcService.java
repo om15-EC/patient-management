@@ -27,6 +27,9 @@ public class BillingGrpcService extends BillingServiceGrpc.BillingServiceImplBas
                                      StreamObserver<BillingResponse> responseObserver) {
         log.info("createBillingAccount request received {}" , request.toString());
 
+        log.info("===== BILLING REQUEST VIA gRPC ===== patientId: {}",
+                request.getPatientId());
+
         if(billingAccountRepository.existsByPatientId(request.getPatientId())){
             log.warn("Billing account is already exists for patientIdL {}", request.getPatientId());
             responseObserver.onError(

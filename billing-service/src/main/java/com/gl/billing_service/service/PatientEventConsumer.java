@@ -23,6 +23,7 @@ public class PatientEventConsumer {
 
     @KafkaListener(topics = "patient", groupId = "billing-service")
     public void consumerPatientEvent(byte[] event){
+        log.info("===== BILLING REQUEST VIA KAFKA ===== ");
         try{
             PatientEvent patientEvent= PatientEvent.parseFrom(event);
             log.info("Received patient event: {} for patientId: {}",
