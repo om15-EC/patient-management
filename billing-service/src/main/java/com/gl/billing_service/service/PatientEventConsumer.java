@@ -40,7 +40,7 @@ public class PatientEventConsumer {
         try {
             if(billingAccountRepository.existsByPatientId(event.getPatientId())){
                 log.warn("Billing account already exists for: {}", event.getPatientId());
-                publishBillingEvent(event.getPatientId(), "ALREADY_EXISTS", "CREATED", "");
+                publishBillingEvent(event.getPatientId(), "ALREADY_EXISTS", "CREATED", "", event.getEmail(), event.getName(), BigDecimal.ZERO);
                 return;
             }
 
@@ -53,20 +53,27 @@ public class PatientEventConsumer {
             log.info("Billing account created: {}", saved.getId());
 
             publishBillingEvent(event.getPatientId(), saved.getId().toString(),
-                    "CREATED", "");
+                    "CREATED", "",
+                    event.getEmail(),
+                    event.getName(),
+                    saved.getBillingAmount());
         } catch (Exception e) {
             log.error("Failed to create billing account for: {}", event.getPatientId());
             // Publish failure event — triggers compensation in patient-service
-            publishBillingEvent(event.getPatientId(), "", "FAILED", e.getMessage());
+            publishBillingEvent(event.getPatientId(), "", "FAILED", e.getMessage(), event.getEmail(), event.getName(), BigDecimal.ZERO);
         }
     }
 
-    private void publishBillingEvent(String patientId, String accountId, String status, String reason) {
+    private void publishBillingEvent(String patientId, String accountId, String status, String reason,
+                                     String patientEmail, String patientName, BigDecimal billingAmount) {
         BillingEvent billingEvent = BillingEvent.newBuilder()
                 .setPatientId(patientId)
                 .setAccountId(accountId)
                 .setStatus(status)
                 .setReason(reason)
+                .setPatientEmail(patientEmail)
+                .setPatientName(patientName)
+                .setBillingAmount(billingAmount.toString())
                 .build();
         kafkaTemplate.send("billing.events", billingEvent.toByteArray());
         log.info("Billing event published: {} for patientId: {}", status, patientId);

@@ -7,4 +7,7 @@ message BillingEvent{
   string accountId =2 ;
   string status = 3;
   string reason = 4;
+  string billingAmount = 5;
+  string patientEmail = 6;
+  string patientName = 7;
 }
