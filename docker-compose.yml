@@ -158,6 +158,8 @@ services:
       JTW_EXPIRATION: ${JWT_EXPIRATION}
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
       JAVA_TOOL_OPTIONS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"
     depends_on:
       auth-service-db:
@@ -165,6 +167,8 @@ services:
       consul:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      zipkin:
         condition: service_healthy
     networks:
       - internal
@@ -192,6 +196,8 @@ services:
         BILLING_SERVICE_GRPC_PORT: 9001
         SPRING_DATA_REDIS_HOST: redis
         SPRING_DATA_REDIS_PORT: 6379
+        MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
+        MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
         JAVA_TOOL_OPTIONS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5006"
     depends_on:
         patient-service-db:
@@ -204,6 +210,8 @@ services:
           condition: service_healthy
         logstash:
           condition: service_started
+        zipkin:
+          condition: service_healthy
     networks:
         - internal
     healthcheck:
@@ -226,12 +234,16 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://billing-service-db:5432/db
       SPRING_DATASOURCE_USERNAME: ${DB_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
       JAVA_TOOL_OPTIONS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5007"
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     depends_on:
       billing-service-db:
         condition: service_healthy
       consul:
+        condition: service_healthy
+      zipkin:
         condition: service_healthy
     networks:
       - internal
@@ -259,6 +271,8 @@ services:
       MAILTRAP_PORT: ${MAILTRAP_PORT}
       MAILTRAP_USERNAME: ${MAILTRAP_USERNAME}
       MAILTRAP_PASSWORD: ${MAILTRAP_PASSWORD}
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
       JAVA_TOOL_OPTIONS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5008"
 #      API_NINJAS_KEY: ${API_NINJAS_KEY}
     depends_on:
@@ -267,6 +281,8 @@ services:
       kafka:
         condition: service_healthy
       consul:
+        condition: service_healthy
+      zipkin:
         condition: service_healthy
     networks:
       - internal
@@ -291,6 +307,8 @@ services:
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
       JAVA_TOOL_OPTIONS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5009"
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
 #      REMOVE JAVA_TOOLS_OPTIONS IN PRODUCTION ENTIRELY.
     depends_on:
       auth-service:
@@ -304,6 +322,8 @@ services:
       consul:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      zipkin:
         condition: service_healthy
     networks:
       - internal
@@ -393,6 +413,20 @@ services:
       interval: 10s
       timeout: 10s
       retries: 5
+      start_period: 60s
+
+  zipkin:
+    image: openzipkin/zipkin:latest
+    container_name: zipkin
+    ports:
+      - "9411:9411"
+    networks:
+      - internal
+    healthcheck:
+      test: [ "CMD-SHELL", "nc -z localhost 9411 || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
       start_period: 60s
 
 
