@@ -1,9 +1,11 @@
 package com.gl.patient_service.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gl.patient_service.dto.PageResponseDTO;
 import com.gl.patient_service.dto.PatientRequestDTO;
 import com.gl.patient_service.dto.PatientResponseDTO;
 import com.gl.patient_service.exception.EmailAlreadyExistException;
+import com.gl.patient_service.exception.GlobalExceptionHandler;
 import com.gl.patient_service.exception.PatientNotFoundById;
 import com.gl.patient_service.service.PatientService;
 import org.apache.coyote.BadRequestException;
@@ -43,7 +45,9 @@ class PatientControllerTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(patientController).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(patientController)
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
         objectMapper = new ObjectMapper();
         testId = UUID.randomUUID();
 
@@ -71,31 +75,49 @@ class PatientControllerTest {
     void testGetPatients_Success() throws Exception {
         // Arrange
         List<PatientResponseDTO> patients = List.of(patientResponseDTO);
-        when(patientService.getPatients()).thenReturn(patients);
+        PageResponseDTO<PatientResponseDTO> pageResponse = new PageResponseDTO<>();
+        pageResponse.setContent(patients);
+        pageResponse.setPageNumber(0);
+        pageResponse.setPageSize(10);
+        pageResponse.setTotalElements(1);
+        pageResponse.setTotalPages(1);
+        pageResponse.setFirst(true);
+        pageResponse.setLast(true);
+
+        when(patientService.getPatients(0, 10, "name", "asc", null, null)).thenReturn(pageResponse);
 
         // Act & Assert
         mockMvc.perform(get("/patients")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].name").value("John Doe"))
-                .andExpect(jsonPath("$[0].email").value("john@example.com"));
+                .andExpect(jsonPath("$.content[0].name").value("John Doe"))
+                .andExpect(jsonPath("$.content[0].email").value("john@example.com"));
 
-        verify(patientService, times(1)).getPatients();
+        verify(patientService, times(1)).getPatients(0, 10, "name", "asc", null, null);
     }
 
     @Test
     void testGetPatients_EmptyList() throws Exception {
         // Arrange
-        when(patientService.getPatients()).thenReturn(List.of());
+        PageResponseDTO<PatientResponseDTO> pageResponse = new PageResponseDTO<>();
+        pageResponse.setContent(List.of());
+        pageResponse.setPageNumber(0);
+        pageResponse.setPageSize(10);
+        pageResponse.setTotalElements(0);
+        pageResponse.setTotalPages(0);
+        pageResponse.setFirst(true);
+        pageResponse.setLast(true);
+
+        when(patientService.getPatients(0, 10, "name", "asc", null, null)).thenReturn(pageResponse);
 
         // Act & Assert
         mockMvc.perform(get("/patients")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$.length()").value(0));
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.content.length()").value(0));
 
-        verify(patientService, times(1)).getPatients();
+        verify(patientService, times(1)).getPatients(0, 10, "name", "asc", null, null);
     }
 
     // Test POST /patients
@@ -108,7 +130,7 @@ class PatientControllerTest {
         mockMvc.perform(post("/patients")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(patientRequestDTO)))
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.name").value("John Doe"))
                 .andExpect(jsonPath("$.email").value("john@example.com"));
 
@@ -125,7 +147,7 @@ class PatientControllerTest {
         mockMvc.perform(post("/patients")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(patientRequestDTO)))
-                .andExpect(status().isInternalServerError());
+                .andExpect(status().isBadRequest());
 
         verify(patientService, times(1)).createPatient(any(PatientRequestDTO.class));
     }
@@ -192,7 +214,7 @@ class PatientControllerTest {
         mockMvc.perform(put("/patients/" + testId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(patientRequestDTO)))
-                .andExpect(status().isInternalServerError());
+                .andExpect(status().isBadRequest());
 
         verify(patientService, times(1)).updatePatient(eq(testId), any(PatientRequestDTO.class));
     }
@@ -207,7 +229,7 @@ class PatientControllerTest {
         mockMvc.perform(put("/patients/" + testId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(patientRequestDTO)))
-                .andExpect(status().isInternalServerError());
+                .andExpect(status().isBadRequest());
 
         verify(patientService, times(1)).updatePatient(eq(testId), any(PatientRequestDTO.class));
     }

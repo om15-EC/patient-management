@@ -1,6 +1,7 @@
 package com.gl.patient_service.exception;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.coyote.BadRequestException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -41,4 +42,15 @@ public class GlobalExceptionHandler {
         error.put("message", "Patient not found");
         return ResponseEntity.badRequest().body(error);
     }
+
+    @ExceptionHandler(BadRequestException.class)
+    public ResponseEntity<Map<String, String>> handleBadRequestException(
+            BadRequestException ex){
+        Map<String,String> error = new HashMap<>();
+        log.warn("Bad request {}", ex.getMessage());
+        error.put("message", ex.getMessage());
+        return ResponseEntity.badRequest().body(error);
+    }
 }
+
+

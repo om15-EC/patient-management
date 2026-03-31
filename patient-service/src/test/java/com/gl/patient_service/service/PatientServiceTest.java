@@ -2,13 +2,14 @@ package com.gl.patient_service.service;
 
 import com.gl.patient_service.dto.PatientRequestDTO;
 import com.gl.patient_service.dto.PatientResponseDTO;
+import com.gl.patient_service.dto.PageResponseDTO;
 import com.gl.patient_service.exception.EmailAlreadyExistException;
 import com.gl.patient_service.exception.PatientNotFoundById;
 import com.gl.patient_service.grpc.BillingServiceGrpcClient;
 import com.gl.patient_service.kafka.KafkaProducer;
-import com.gl.patient_service.mapper.PatientMapper;
 import com.gl.patient_service.model.Patient;
 import com.gl.patient_service.repository.PatientRepository;
+import com.gl.patient_service.repository.OutboxEventRepository;
 import org.apache.coyote.BadRequestException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,6 +17,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -38,6 +42,9 @@ class PatientServiceTest {
 
     @Mock
     private KafkaProducer kafkaProducer;
+
+    @Mock
+    private OutboxEventRepository outboxEventRepository;
 
     @InjectMocks
     private PatientService patientService;
@@ -75,29 +82,31 @@ class PatientServiceTest {
     void testGetPatients_Success() {
         // Arrange
         List<Patient> patients = List.of(testPatient);
-        when(patientRepository.findAll()).thenReturn(patients);
+        Page<Patient> page = new PageImpl<>(patients, PageRequest.of(0, 10), 1);
+        when(patientRepository.findAll(any(PageRequest.class))).thenReturn(page);
 
         // Act
-        List<PatientResponseDTO> result = patientService.getPatients();
+        PageResponseDTO<PatientResponseDTO> result = patientService.getPatients(0, 10, "name", "asc", null, null);
 
         // Assert
         assertNotNull(result);
-        assertEquals(1, result.size());
-        verify(patientRepository, times(1)).findAll();
+        assertEquals(1, result.getContent().size());
+        verify(patientRepository, times(1)).findAll(any(PageRequest.class));
     }
 
     @Test
     void testGetPatients_EmptyList() {
         // Arrange
-        when(patientRepository.findAll()).thenReturn(List.of());
+        Page<Patient> page = new PageImpl<>(List.of(), PageRequest.of(0, 10), 0);
+        when(patientRepository.findAll(any(PageRequest.class))).thenReturn(page);
 
         // Act
-        List<PatientResponseDTO> result = patientService.getPatients();
+        PageResponseDTO<PatientResponseDTO> result = patientService.getPatients(0, 10, "name", "asc", null, null);
 
         // Assert
         assertNotNull(result);
-        assertTrue(result.isEmpty());
-        verify(patientRepository, times(1)).findAll();
+        assertTrue(result.getContent().isEmpty());
+        verify(patientRepository, times(1)).findAll(any(PageRequest.class));
     }
 
     // Test createPatient
@@ -106,8 +115,9 @@ class PatientServiceTest {
         // Arrange
         when(patientRepository.existsByEmail(patientRequestDTO.getEmail())).thenReturn(false);
         when(patientRepository.save(any(Patient.class))).thenReturn(testPatient);
-        doNothing().when(billingServiceGrpcClient).createBillingAccount(anyString(), anyString(), anyString());
-        doNothing().when(kafkaProducer).sendEvent(any(Patient.class));
+        when(outboxEventRepository.save(any())).thenReturn(null);
+        when(outboxEventRepository.findByAggregateId(any())).thenReturn(Optional.empty());
+        when(billingServiceGrpcClient.createBillingAccount(anyString(), anyString(), anyString())).thenReturn(null);
 
         // Act
         PatientResponseDTO result = patientService.createPatient(patientRequestDTO);
@@ -115,7 +125,7 @@ class PatientServiceTest {
         // Assert
         assertNotNull(result);
         verify(patientRepository, times(1)).existsByEmail(patientRequestDTO.getEmail());
-        verify(patientRepository, times(1)).save(any(Patient.class));
+        verify(patientRepository, times(2)).save(any(Patient.class));
         verify(billingServiceGrpcClient, times(1)).createBillingAccount(anyString(), anyString(), anyString());
         verify(kafkaProducer, times(1)).sendEvent(any(Patient.class));
     }
@@ -207,7 +217,7 @@ class PatientServiceTest {
     }
 
     @Test
-    void testPatchPatient_InvalidDateFormat() throws BadRequestException {
+    void testPatchPatient_InvalidDateFormat() {
         // Arrange
         patientRequestDTO.setDateOfBirth("invalid-date");
         when(patientRepository.findById(testId)).thenReturn(Optional.of(testPatient));
