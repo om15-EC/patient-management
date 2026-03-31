@@ -1,5 +1,6 @@
 package com.gl.patient_service.service;
 
+import com.gl.patient_service.dto.PageResponseDTO;
 import com.gl.patient_service.dto.PatientRequestDTO;
 import com.gl.patient_service.dto.PatientResponseDTO;
 import com.gl.patient_service.exception.EmailAlreadyExistException;
@@ -17,6 +18,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.coyote.BadRequestException;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -41,11 +46,44 @@ public class PatientService {
         this.outboxEventRepository = outboxEventRepository;
     }
 
-    @Cacheable(value = "patients", key = "'all'")
-    public List<PatientResponseDTO> getPatients(){
-        List<Patient> patients = patientRepository.findAll();
-        return patients.stream()
-                .map(PatientMapper::toDTO).toList();
+    @Cacheable(value = "patients", key = "'all_' + #page + '_' + #size + '_' + #sortBy + '_' + #sortDir + '_' + #diagnosis + '_' + #status")
+    public PageResponseDTO<PatientResponseDTO> getPatients(
+            int page, int size, String sortBy, String sortDir,
+            String diagnosis, PatientStatus status) {
+
+        Sort sort = sortDir.equalsIgnoreCase("asc")
+                ? Sort.by(sortBy).ascending()
+                : Sort.by(sortBy).descending();
+
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        Page<Patient> patientPage;
+
+        // filter logic
+        if (diagnosis != null && status != null) {
+            // both filters
+            patientPage = patientRepository
+                    .findByDiagnosisAndStatus(diagnosis, status, pageable);
+
+        } else if (diagnosis != null) {
+            // diagnosis only
+            patientPage = patientRepository
+                    .findByDiagnosis(diagnosis, pageable);
+
+        } else if (status != null) {
+            // status only
+            patientPage = patientRepository
+                    .findByStatus(status, pageable);
+
+        } else {
+            // no filter — return all
+            patientPage = patientRepository.findAll(pageable);
+        }
+
+        log.info("Fetching patients page:{} size:{} diagnosis:{} status:{}",
+                page, size, diagnosis, status);
+
+        return PageResponseDTO.of(patientPage.map(PatientMapper::toDTO));
     }
 
     @Cacheable(value = "patient", key = "#id")

@@ -2,9 +2,11 @@ package com.gl.patient_service.controller;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gl.patient_service.dto.PageResponseDTO;
 import com.gl.patient_service.dto.PatientRequestDTO;
 import com.gl.patient_service.dto.PatientResponseDTO;
 import com.gl.patient_service.dto.validators.CreatePatientValidationGroup;
+import com.gl.patient_service.model.PatientStatus;
 import com.gl.patient_service.service.IdempotencyService;
 import com.gl.patient_service.service.PatientService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,9 +41,17 @@ public class PatientController {
 
     @GetMapping
     @Operation(summary = "Get Patients")
-    public ResponseEntity<List<PatientResponseDTO>> getPatients() {
+    public ResponseEntity<PageResponseDTO<PatientResponseDTO>> getPatients(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "name") String sortBy,
+            @RequestParam(defaultValue = "asc") String sortDir,
+            @RequestParam(required = false) String diagnosis,
+            @RequestParam(required = false) PatientStatus status
+    ) {
 
-        List<PatientResponseDTO> patients = patientService.getPatients();
+        PageResponseDTO<PatientResponseDTO> patients = patientService.getPatients(page, size, sortBy, sortDir,
+                diagnosis, status);
         return ResponseEntity.ok().body(patients);
     }
 
