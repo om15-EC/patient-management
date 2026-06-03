@@ -341,10 +341,14 @@ services:
       -client=0.0.0.0
       -bind=0.0.0.0
       -data-dir=/consul/data
+      -rejoin
+      -retry-join=consul
     volumes:
       - consul-data:/consul/data
     networks:
       - internal
+    environment:
+      - CONSUL_LOCAL_CONFIG={"server_rejoin_age_max":"720h"}
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8500/v1/status/leader" ]
       interval: 10s
