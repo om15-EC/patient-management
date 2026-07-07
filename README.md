@@ -42,10 +42,6 @@ Auth Service  Patient Service  Analytics Service
                 :4001
                billing-db
 
-AI Service :4006
-  └── reads patient-db (read-only)
-  └── Gemini API (function calling)
-
 Infrastructure:
   Kafka    :9092   — async event streaming
   Redis    :6379   — cache · blacklist · rate limiting
@@ -339,7 +335,6 @@ patient-management/
 ├── billing-service/            ← Billing service (gRPC server)
 ├── analytics-service/          ← Analytics + enrichment service
 ├── api-gateway/                ← Spring Cloud Gateway
-├── ai-service/                 ← Spring AI chatbot
 ├── logstash/
 │   └── pipeline/
 │       └── logstash.conf       ← Log pipeline config
