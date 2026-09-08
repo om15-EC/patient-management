@@ -5,8 +5,6 @@ import com.gl.patient_service.dto.PatientRequestDTO;
 import com.gl.patient_service.dto.PatientResponseDTO;
 import com.gl.patient_service.exception.EmailAlreadyExistException;
 import com.gl.patient_service.exception.PatientNotFoundById;
-import com.gl.patient_service.grpc.BillingServiceGrpcClient;
-import com.gl.patient_service.kafka.KafkaProducer;
 import com.gl.patient_service.mapper.PatientMapper;
 import com.gl.patient_service.model.OutboxEvent;
 import com.gl.patient_service.model.Patient;
@@ -25,9 +23,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
-import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -35,14 +31,12 @@ import java.util.UUID;
 public class PatientService {
 
     private final PatientRepository patientRepository;
-    private final BillingServiceGrpcClient billingServiceGrpcClient;
-    private final KafkaProducer kafkaProducer;
+//    private final BillingServiceGrpcClient billingServiceGrpcClient;
+//    private final KafkaProducer kafkaProducer;
     private final OutboxEventRepository outboxEventRepository;
 
-    public PatientService(PatientRepository patientRepository, BillingServiceGrpcClient billingServiceGrpcClient, KafkaProducer kafkaProducer, OutboxEventRepository outboxEventRepository) {
+    public PatientService(PatientRepository patientRepository, OutboxEventRepository outboxEventRepository) {
         this.patientRepository = patientRepository;
-        this.billingServiceGrpcClient = billingServiceGrpcClient;
-        this.kafkaProducer = kafkaProducer;
         this.outboxEventRepository = outboxEventRepository;
     }
 
@@ -109,33 +103,33 @@ public class PatientService {
 
 
 //      grpc
-        try{
-        billingServiceGrpcClient.createBillingAccount(
-                newPatient.getId().toString(),
-                newPatient.getName(),
-                newPatient.getEmail());
-
-//      grpc success, making patient as ACTIVE
-        newPatient.setStatus(PatientStatus.ACTIVE);
-        patientRepository.save(newPatient);
-        log.info("Billing created via gRPC — patient ACTIVE: {}", newPatient.getId());
-
-//      mark outbox as published.
-        outboxEventRepository.findByAggregateId(newPatient.getId())
-                .ifPresent(event -> {
-                event.setPublished(true);
-                event.setPublishedAt(LocalDateTime.now());
-                outboxEventRepository.save(event);
-                });
-
-        // Still sending analytics event via Kafka
-        kafkaProducer.sendEvent(newPatient);
-        }catch (Exception e){
-            // gRPC failed — OutboxPublisher will handle via Kafka
-            log.warn("gRPC failed for patientId: {} — Outbox will handle: {}",
-                    newPatient.getId(), e.getMessage());
-            // patient stays PENDING — will be ACTIVE via Kafka flow
-        }
+//        try{
+//        billingServiceGrpcClient.createBillingAccount(
+//                newPatient.getId().toString(),
+//                newPatient.getName(),
+//                newPatient.getEmail());
+//
+////      grpc success, making patient as ACTIVE
+//        newPatient.setStatus(PatientStatus.ACTIVE);
+//        patientRepository.save(newPatient);
+//        log.info("Billing created via gRPC — patient ACTIVE: {}", newPatient.getId());
+//
+////      mark outbox as published.
+//        outboxEventRepository.findByAggregateId(newPatient.getId())
+//                .ifPresent(event -> {
+//                event.setPublished(true);
+//                event.setPublishedAt(LocalDateTime.now());
+//                outboxEventRepository.save(event);
+//                });
+//
+//        // Still sending analytics event via Kafka
+//        kafkaProducer.sendEvent(newPatient);
+//        }catch (Exception e){
+//            // gRPC failed — OutboxPublisher will handle via Kafka
+//            log.warn("gRPC failed for patientId: {} — Outbox will handle: {}",
+//                    newPatient.getId(), e.getMessage());
+//            // patient stays PENDING — will be ACTIVE via Kafka flow
+//        }
         return PatientMapper.toDTO(newPatient);
     }
 
