@@ -4,8 +4,6 @@ import com.gl.patient_service.dto.PageResponseDTO;
 import com.gl.patient_service.dto.PatientRequestDTO;
 import com.gl.patient_service.dto.PatientResponseDTO;
 import com.gl.patient_service.exception.PatientNotFoundById;
-import com.gl.patient_service.grpc.BillingServiceGrpcClient;
-import com.gl.patient_service.kafka.KafkaProducer;
 import com.gl.patient_service.model.OutboxEvent;
 import com.gl.patient_service.model.Patient;
 import com.gl.patient_service.model.PatientStatus;
@@ -30,14 +28,14 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
  * Additional unit tests for {@link PatientService} covering:
  *   - getPatientById (hit / miss)
  *   - filter combinations in getPatients
- *   - gRPC failure fallback during createPatient
+ *   - createPatient outbox persistence
  *   - deletePatient
  *   - sort direction
  */
@@ -45,8 +43,6 @@ import static org.mockito.Mockito.*;
 class PatientServiceAdditionalTest {
 
     @Mock private PatientRepository patientRepository;
-    @Mock private BillingServiceGrpcClient billingServiceGrpcClient;
-    @Mock private KafkaProducer kafkaProducer;
     @Mock private OutboxEventRepository outboxEventRepository;
 
     @InjectMocks
@@ -169,50 +165,32 @@ class PatientServiceAdditionalTest {
         verify(patientRepository).findAll(any(Pageable.class));
     }
 
-    // ------------------------------------------------------------------ //
-    //  createPatient — gRPC failure path
-    // ------------------------------------------------------------------ //
-
     @Test
-    void createPatient_whenGrpcFails_shouldKeepPatientPendingAndNotSendKafkaEvent() {
+    void createPatient_shouldSavePatientAndOutboxEvent() {
         // Given
-        when(patientRepository.existsByEmail(anyString())).thenReturn(false);
-        when(patientRepository.save(any(Patient.class))).thenReturn(patient);
+        when(patientRepository.existsByEmail(requestDTO.getEmail())).thenReturn(false);
+        when(patientRepository.save(any(Patient.class))).thenAnswer(invocation -> {
+            Patient savedPatient = invocation.getArgument(0);
+            savedPatient.setId(patientId);
+            return savedPatient;
+        });
         when(outboxEventRepository.save(any())).thenReturn(mock(OutboxEvent.class));
-        doThrow(new RuntimeException("gRPC unavailable"))
-                .when(billingServiceGrpcClient)
-                .createBillingAccount(anyString(), anyString(), anyString());
 
-        // When — must NOT throw; exception is swallowed intentionally
+        // When
         PatientResponseDTO result = patientService.createPatient(requestDTO);
 
         // Then
         assertThat(result).isNotNull();
-        // Kafka event must NOT be sent when gRPC failed
-        verify(kafkaProducer, never()).sendEvent(any(Patient.class));
-        // Patient is saved exactly once (PENDING) — second save (ACTIVE) never happens
-        verify(patientRepository, times(1)).save(any(Patient.class));
-    }
+        assertThat(result.getId()).isEqualTo(patientId.toString());
 
-    @Test
-    void createPatient_whenGrpcSucceeds_shouldActivatePatientAndSendKafkaEvent() {
-        // Given
-        when(patientRepository.existsByEmail(anyString())).thenReturn(false);
-        when(patientRepository.save(any(Patient.class))).thenReturn(patient);
-        when(outboxEventRepository.save(any())).thenReturn(mock(OutboxEvent.class));
-        when(outboxEventRepository.findByAggregateId(any())).thenReturn(Optional.empty());
-        when(billingServiceGrpcClient.createBillingAccount(anyString(), anyString(), anyString()))
-                .thenReturn(null);
+        verify(patientRepository, times(1))
+                .existsByEmail(requestDTO.getEmail());
 
-        // When
-        patientService.createPatient(requestDTO);
+        verify(patientRepository, times(1))
+                .save(any(Patient.class));
 
-        // Then
-        verify(billingServiceGrpcClient, times(1))
-                .createBillingAccount(anyString(), anyString(), anyString());
-        verify(kafkaProducer, times(1)).sendEvent(any(Patient.class));
-        // save called twice: once for PENDING, once for ACTIVE
-        verify(patientRepository, times(2)).save(any(Patient.class));
+        verify(outboxEventRepository, times(1))
+                .save(any(OutboxEvent.class));
     }
 
     // ------------------------------------------------------------------ //

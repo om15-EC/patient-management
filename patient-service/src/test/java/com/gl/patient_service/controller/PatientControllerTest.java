@@ -7,6 +7,7 @@ import com.gl.patient_service.dto.PatientResponseDTO;
 import com.gl.patient_service.exception.EmailAlreadyExistException;
 import com.gl.patient_service.exception.GlobalExceptionHandler;
 import com.gl.patient_service.exception.PatientNotFoundById;
+import com.gl.patient_service.service.IdempotencyService;
 import com.gl.patient_service.service.PatientService;
 import org.apache.coyote.BadRequestException;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -34,11 +36,16 @@ class PatientControllerTest {
     @Mock
     private PatientService patientService;
 
+    @Mock
+    private IdempotencyService idempotencyService;
+
+    @Spy
+    private ObjectMapper objectMapper = new ObjectMapper();
+
     @InjectMocks
     private PatientController patientController;
 
     private MockMvc mockMvc;
-    private ObjectMapper objectMapper;
     private PatientRequestDTO patientRequestDTO;
     private PatientResponseDTO patientResponseDTO;
     private UUID testId;
@@ -48,7 +55,6 @@ class PatientControllerTest {
         mockMvc = MockMvcBuilders.standaloneSetup(patientController)
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
-        objectMapper = new ObjectMapper();
         testId = UUID.randomUUID();
 
         patientRequestDTO = new PatientRequestDTO();

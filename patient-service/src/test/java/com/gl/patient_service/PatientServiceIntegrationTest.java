@@ -56,7 +56,7 @@ class PatientServiceIntegrationTest {
         mockMvc.perform(post("/patients")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(patientRequestDTO)))
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.name").value("Integration Test Patient"))
                 .andExpect(jsonPath("$.email").value("integration@test.com"));
     }
@@ -67,13 +67,13 @@ class PatientServiceIntegrationTest {
         mockMvc.perform(post("/patients")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(patientRequestDTO)))
-                .andExpect(status().isOk());
+                .andExpect(status().isCreated());
 
         // Act & Assert - Get all patients
         mockMvc.perform(get("/patients")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].name").value("Integration Test Patient"));
+                .andExpect(jsonPath("$.content[0].name").value("Integration Test Patient"));
     }
 
     @Test
@@ -82,7 +82,7 @@ class PatientServiceIntegrationTest {
         String createResponse = mockMvc.perform(post("/patients")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(patientRequestDTO)))
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
@@ -112,7 +112,7 @@ class PatientServiceIntegrationTest {
         String createResponse = mockMvc.perform(post("/patients")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(patientRequestDTO)))
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
@@ -138,7 +138,7 @@ class PatientServiceIntegrationTest {
         String createResponse = mockMvc.perform(post("/patients")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(patientRequestDTO)))
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
@@ -155,8 +155,8 @@ class PatientServiceIntegrationTest {
         mockMvc.perform(get("/patients")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$.length()").value(0));
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.content.length()").value(0));
     }
 
     @Test
@@ -165,13 +165,13 @@ class PatientServiceIntegrationTest {
         mockMvc.perform(post("/patients")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(patientRequestDTO)))
-                .andExpect(status().isOk());
+                .andExpect(status().isCreated());
 
         // Act & Assert - Try to create second patient with same email
         mockMvc.perform(post("/patients")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(patientRequestDTO)))
-                .andExpect(status().isInternalServerError());
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -180,7 +180,7 @@ class PatientServiceIntegrationTest {
         String createResponse = mockMvc.perform(post("/patients")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(patientRequestDTO)))
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
@@ -192,7 +192,7 @@ class PatientServiceIntegrationTest {
         mockMvc.perform(get("/patients")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].email").value("integration@test.com"));
+                .andExpect(jsonPath("$.content[0].email").value("integration@test.com"));
 
         // 3. Update patient
         PatientRequestDTO updateDTO = new PatientRequestDTO();
@@ -221,4 +221,3 @@ class PatientServiceIntegrationTest {
                 .andExpect(status().isNoContent());
     }
 }
-

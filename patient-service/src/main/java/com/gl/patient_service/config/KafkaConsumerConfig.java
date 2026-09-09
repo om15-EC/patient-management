@@ -6,7 +6,6 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -48,12 +47,14 @@ public class KafkaConsumerConfig {
     public ConcurrentKafkaListenerContainerFactory<String, byte[]>
     kafkaListenerContainerFactory(
             ConsumerFactory<String, byte[]> consumerFactory,
-            KafkaTemplate<String, byte[]> kafkaTemplate) {
+            KafkaTemplate<String, byte[]> kafkaTemplate,
+            @Value("${spring.kafka.listener.auto-startup:true}") boolean autoStartup) {
 
         ConcurrentKafkaListenerContainerFactory<String, byte[]> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
 
         factory.setConsumerFactory(consumerFactory);
+        factory.setAutoStartup(autoStartup);
 
 
         factory.setCommonErrorHandler(deadLetterErrorHandler(kafkaTemplate));

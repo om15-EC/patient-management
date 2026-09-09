@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -20,12 +21,11 @@ import java.time.Duration;
 @Configuration
 @EnableCaching
 @Slf4j
+@ConditionalOnProperty(name = "app.cache.redis.enabled", havingValue = "true", matchIfMissing = true)
 public class CacheConfig {
 
     @Bean
     public RedisCacheManager cacheManager(RedisConnectionFactory factory){
-
-        System.out.println("======= CacheConfig LOADED ======="); // add this
         log.info("CacheConfig — RedisCacheManager initialized");
 
         ObjectMapper objectMapper = new ObjectMapper();
