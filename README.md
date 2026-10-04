@@ -1,6 +1,6 @@
 # 🏥 Patient Management System
 
-A **production-grade microservices system** built with Spring Boot, demonstrating real-world distributed systems architecture with enterprise security, observability, and AI integration (TO-DO).
+A multi-service patient API built with Spring Boot. The gateway checks JWTs, patient changes go out through Kafka, and each service has its own Postgres database.
 
 ---
 
@@ -36,15 +36,19 @@ Auth Service  Patient Service  Analytics Service
   :4005          :4000            :4002
   auth-db        patient-db       analytics-db
                     │
-                    │ gRPC
+                    │ Kafka topic: patient
                     ▼
              Billing Service
                 :4001
                billing-db
+                    │
+                    │ Kafka topic: billing.events
+                    ▼
+             Patient Service (status ACTIVE or FAILED)
 
 Infrastructure:
-  Kafka    :9092   — async event streaming
-  Redis    :6379   — cache · blacklist · rate limiting
+  Kafka    :9092   — patient and billing events
+  Redis    :6379   — cache · blacklist · rate limit · idempotency
   Consul   :8500   — service discovery
   ELK      :9200/:5601 — centralized logging
   Zipkin   :9411   — distributed tracing
@@ -81,22 +85,24 @@ Infrastructure:
 Handles authentication and authorization.
 - JWT access tokens (15 min) + refresh tokens (7 days)
 - BCrypt password hashing (strength 12)
-- Redis token blacklist for instant revocation
-- Admin force-logout and permanent user disable
+- Public registration always creates `ROLE_USER`
+- Redis token blacklist on logout
+- Admin force-logout also revokes the refresh token. Disable is permanent in the database.
 
 ###  Patient Service (:4000)
 Core CRUD operations for patient management.
 - REST API with pagination and filtering
-- Saga pattern — patient status: `PENDING → ACTIVE/FAILED`
-- Outbox pattern — guaranteed Kafka event delivery
-- Idempotency keys — duplicate request prevention
+- New patients stay `PENDING` until billing answers. No answer within 2 minutes, or a billing failure, sets `FAILED`.
+- Outbox row is marked published only after Kafka acks the record
+- Optional `Idempotency-Key` header. The response is cached in Redis for 24 hours.
 - Redis caching (1 min list · 10 min single)
+- Requires the gateway internal token plus `X-User-Email` / `X-User-Role`. A direct call with a forged role is rejected.
 
 ###  Billing Service (:4001)
 Manages patient billing accounts.
-- gRPC server — fast synchronous billing account creation
-- Kafka consumer — async fallback via Outbox pattern
-- Dead Letter Queue (DLQ) — failed message handling
+- Kafka consumer creates the billing account, then publishes `billing.events`
+- gRPC server is still in this service. Patient creation does not call it.
+- Failed records are retried, then published to a DLT. The DLT listener logs them.
 
 ###  Analytics Service (:4002)
 Event processing and enrichment.
@@ -110,24 +116,19 @@ Event processing and enrichment.
 ###  API Gateway (:4004)
 Single entry point for all clients.
 - JWT validation + Redis blacklist check
-- RBAC enforcement (ROLE_ADMIN · ROLE_USER)
+- `ROLE_ADMIN` can call any method. `ROLE_USER` is GET only.
 - Rate limiting (token bucket · Redis)
-- Consul service discovery (lb:// URIs)
-- Request header injection (X-User-Email · X-User-Role)
+- Consul service discovery (`lb://` URIs)
+- Replaces any client-sent `X-User-Email` / `X-User-Role` and sets them from the token, along with `X-Internal-Token`
 
 ---
 
 ## Communication Patterns
 
 ```
-┌─────────────────────────────────────────────────┐
-│  Pattern    │ Used For                           │
-├─────────────┼────────────────────────────────────│
-│  REST       │ External clients → Gateway         │
-│  gRPC       │ Patient → Billing (sync fast path) │
-│  Kafka      │ Async events between services      │
-│                                                  │
-└─────────────────────────────────────────────────┘
+REST    clients → gateway → services
+Kafka   patient, billing, and analytics
+```
 
 Kafka Topics:
   patient        → patient.created events (protobuf)
@@ -140,16 +141,16 @@ Kafka Topics:
 
 ## Security
 
-7 layers of defense in depth:
+The stack is HTTP on localhost, not TLS. Checks that are actually in the code:
 
 ```
-1. HTTPS/TLS          — encrypted transport
-2. JWT Validation     — HMAC-SHA384 signature verification
-3. Token Blacklist    — Redis · instant revocation on logout
-4. User Blacklist     — Redis · admin force-logout
-5. RBAC               — role-based access at gateway
-6. Rate Limiting      — token bucket · Redis · 429 response
-7. @PreAuthorize      — method-level security
+1. JWT signature      — HMAC-SHA384, checked at the gateway
+2. Token blacklist    — Redis, logout
+3. User blacklist     — Redis, admin force-logout (refresh token included)
+4. Role check         — gateway, and again inside patient-service
+5. Internal token     — patient-service only trusts calls from the gateway
+6. Rate limit         — Redis token bucket at the gateway
+7. @PreAuthorize      — analytics summary and the admin API
 ```
 
 | Role | Access |
@@ -163,23 +164,21 @@ Kafka Topics:
 ## Features
 
 ### Distributed Systems Patterns
-- ✅ **Saga Pattern** — choreography-based distributed transactions
-- ✅ **Outbox Pattern** — guaranteed at-least-once event delivery
-- ✅ **Circuit Breaker** — Resilience4j with fallback responses
-- ✅ **Idempotency Keys** — duplicate request prevention with body hash validation
-- ✅ **Dead Letter Queue** — failed Kafka messages never dropped
+- ✅ **Saga** — patient stays `PENDING` until billing reports back, or the 2 minute timeout fires
+- ✅ **Outbox** — the patient row and the event row commit together. Kafka publish happens after the commit, and only an acked send is marked published.
+- ✅ **Circuit breaker** — Resilience4j around the Wikipedia and country calls in analytics
+- ✅ **Idempotency-Key** — optional. Same key returns the cached create response for 24 hours. The request body is not hashed.
+- ✅ **DLT** — a record that still fails after 3 retries is published to `*.DLT` and logged
 
 ### Observability
 - ✅ **Centralized Logging** — ELK Stack (Kibana index: `patient-management-*`)
 - ✅ **Distributed Tracing** — OpenTelemetry + Zipkin (100% sampling)
-- ✅ **Health Checks** — Spring Actuator + Consul health checks
-- ✅ **Graceful Shutdown** — 30s drain period for in-flight requests
+- ✅ **Health checks** — Actuator, used by Consul and Compose
 
 ### Performance
-- ✅ **Redis Caching** — multi-layer with TTL per cache type
-- ✅ **Parallel API calls** — CompletableFuture for external enrichment
-- ✅ **gRPC fast path** — binary protocol for internal sync calls
-- ✅ **Kafka async** — non-blocking event processing
+- ✅ **Redis cache** — patient list for 1 minute, one patient for 10 minutes
+- ✅ **Parallel calls** — analytics fetches disease and country info together
+- ✅ **Kafka** — patient creation does not wait on billing. The HTTP call returns while the patient is still `PENDING`.
 
 ---
 
@@ -213,14 +212,13 @@ DB_USERNAME=your_db_username
 DB_PASSWORD=your_db_password
 JWT_SECRET=your_base64_encoded_secret_min_32_chars
 JWT_EXPIRATION=900000
-SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-BILLING_SERVICE_ADDRESS=billing-service
-BILLING_SERVICE_GRPC_PORT=9001
 MAILTRAP_HOST=sandbox.smtp.mailtrap.io
 MAILTRAP_PORT=2525
 MAILTRAP_USERNAME=your_mailtrap_username
 MAILTRAP_PASSWORD=your_mailtrap_password
 ```
+
+Leave `REDIS_PASSWORD` and `INTERNAL_API_SECRET` blank unless you want your own values. Compose then uses `dev-redis-password` and `dev-internal-token`. Kafka and the billing host are already set in `docker-compose.yml`.
 
 ### 3. Build proto-common
 
@@ -233,7 +231,7 @@ cd ..
 ### 4. Start all services
 
 ```bash
-docker compose up -d
+docker compose up --build -d
 ```
 
 ### 5. Verify all services are running
@@ -242,20 +240,30 @@ docker compose up -d
 docker compose ps
 ```
 
-Expected: all containers `healthy`
+Most containers should be `healthy`. Auth can stay `unhealthy`: its healthcheck calls `curl`, and that image does not have `curl`. Check `docker compose logs auth-service` if login fails.
 
-### 6. Register first admin user
+### 6. Register a user
+
+Public registration only accepts `ROLE_USER`. There is no `name` field.
 
 ```bash
 curl -X POST http://localhost:4004/api/v1/auth/register \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "Admin User",
     "email": "admin@example.com",
     "password": "Admin@1234",
-    "role": "ROLE_ADMIN"
+    "role": "ROLE_USER"
   }'
 ```
+
+To make that user an admin, update the auth database:
+
+```bash
+docker exec -it auth-service-db psql -U your_db_username -d db \
+  -c "UPDATE users SET role = 'ROLE_ADMIN' WHERE email = 'admin@example.com';"
+```
+
+`your_db_username` is the `DB_USERNAME` value from `.env`.
 
 ### 7. Login and get token
 
@@ -276,7 +284,7 @@ curl -X POST http://localhost:4004/api/v1/auth/login \
 
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| POST | `/register` | None | Register new user |
+| POST | `/register` | None | Register a `ROLE_USER` |
 | POST | `/login` | None | Login → get JWT tokens |
 | POST | `/logout` | Bearer | Blacklist current token |
 | POST | `/refresh` | Refresh-Token header | Get new access token |
@@ -285,9 +293,8 @@ curl -X POST http://localhost:4004/api/v1/auth/login \
 
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/logout/{email}` | Force logout a user |
-| POST | `/disable/{email}` | Permanently disable user |
-| POST | `/enable/{email}` | Re-enable disabled user |
+| POST | `/logout/{email}` | Force logout. Kills the refresh token too. |
+| POST | `/disable/{email}` | Disable the account in Postgres and revoke sessions |
 
 ### Patient Service (`/api/patients`) — via Gateway
 
@@ -332,7 +339,7 @@ patient-management/
 │       └── billing_event.proto
 ├── auth-service/               ← Authentication service
 ├── patient-service/            ← Patient CRUD service
-├── billing-service/            ← Billing service (gRPC server)
+├── billing-service/            ← Billing service (Kafka consumer, gRPC server unused by patient create)
 ├── analytics-service/          ← Analytics + enrichment service
 ├── api-gateway/                ← Spring Cloud Gateway
 ├── logstash/
