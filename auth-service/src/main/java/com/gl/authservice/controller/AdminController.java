@@ -2,6 +2,7 @@ package com.gl.authservice.controller;
 
 import com.gl.authservice.repository.UserRepository;
 import com.gl.authservice.service.TokenBlacklistService;
+import com.gl.authservice.util.JwtUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,12 +21,20 @@ public class AdminController {
 
     private final TokenBlacklistService tokenBlacklistService;
     private final UserRepository userRepository;
+    private final JwtUtil jwtUtil;
 
 
     @Operation(summary = "Admin force logout a user")
     @PostMapping("/logout/{email}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<Void> forceLogout(@PathVariable String email) {
+        tokenBlacklistService.getRefreshToken(email).ifPresent(refreshToken -> {
+            long remaining = jwtUtil.getRemainingExpiration(refreshToken);
+            if (remaining > 0) {
+                tokenBlacklistService.blackListToken(refreshToken, remaining);
+            }
+        });
+        tokenBlacklistService.deleteRefreshToken(email);
         tokenBlacklistService.blacklistUser(email);
         log.info("Admin force-logged out userId: {}", email);
         return ResponseEntity.noContent().build();

@@ -35,12 +35,10 @@ public class AuthService {
             throw new EmailAlreadyExistsException("Email already registered" + registerRequestDTO.email());
         }
 
-        Role role;
-        try {
-            role = Role.valueOf(registerRequestDTO.role().toUpperCase());
-        }catch (IllegalArgumentException e){
-            throw new IllegalArgumentException("Invalid role, accepted values are: ROLE_USER, ROLE_ADMIN");
+        if (!"ROLE_USER".equals(registerRequestDTO.role().trim().toUpperCase())) {
+            throw new IllegalArgumentException("Public registration only accepts ROLE_USER");
         }
+        Role role = Role.ROLE_USER;
 
         User user = User.builder()
                 .email(registerRequestDTO.email())

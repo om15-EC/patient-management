@@ -30,6 +30,11 @@ public class BillingEventConsumer {
             if("CREATED".equals(billingEvent.getStatus())){
                 patientRepository.findById(patientId).ifPresent(
                         patient -> {
+                            if (patient.getStatus() != PatientStatus.PENDING) {
+                                log.warn("Ignoring CREATED for patient {} already in status {}",
+                                        patientId, patient.getStatus());
+                                return;
+                            }
                             patient.setStatus(PatientStatus.ACTIVE);
                             patientRepository.save(patient);
                             log.info("Patient {} marked ACTIVE", patientId);
@@ -38,6 +43,11 @@ public class BillingEventConsumer {
             } else if ("FAILED".equals(billingEvent.getStatus())) {
                 patientRepository.findById(patientId).ifPresent(
                         patient -> {
+                            if (patient.getStatus() != PatientStatus.PENDING) {
+                                log.warn("Ignoring FAILED for patient {} already in status {}",
+                                        patientId, patient.getStatus());
+                                return;
+                            }
                             patient.setStatus(PatientStatus.FAILED);
                             patientRepository.save(patient);
                             log.warn("Patient {} marked FAILED — billing failed: {}",

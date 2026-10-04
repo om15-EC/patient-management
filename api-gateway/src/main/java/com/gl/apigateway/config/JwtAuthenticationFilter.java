@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.http.HttpStatus;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
@@ -19,9 +20,14 @@ public class JwtAuthenticationFilter implements GatewayFilter {
     private final JwtUtil jwtUtil;
     private final TokenBlacklistService tokenBlacklistService;
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil, TokenBlacklistService tokenBlacklistService) {
+    private final String internalToken;
+
+    public JwtAuthenticationFilter(JwtUtil jwtUtil,
+                                   TokenBlacklistService tokenBlacklistService,
+                                   @Value("${app.security.internal-token:}") String internalToken) {
         this.jwtUtil = jwtUtil;
         this.tokenBlacklistService = tokenBlacklistService;
+        this.internalToken = internalToken;
     }
 
     @Override
@@ -80,8 +86,16 @@ public class JwtAuthenticationFilter implements GatewayFilter {
                     }
 
                     ServerWebExchange modifiedExchange = exchange.mutate()
-                            .request(r -> r.header("X-User-Email", email)
-                                    .header("X-User-Role", role))
+                            .request(r -> r.headers(headers -> {
+                                headers.remove("X-User-Email");
+                                headers.remove("X-User-Role");
+                                headers.remove("X-Internal-Token");
+                                headers.set("X-User-Email", email);
+                                headers.set("X-User-Role", role);
+                                if (!internalToken.isBlank()) {
+                                    headers.set("X-Internal-Token", internalToken);
+                                }
+                            }))
                             .build();
 
                     log.info("Access granted for user: {} role: {} on {} {}",

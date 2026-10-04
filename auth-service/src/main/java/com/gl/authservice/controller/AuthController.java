@@ -88,7 +88,12 @@ public class AuthController {
 
         // extract email and validate against Redis
         String email = jwtUtil.extractEmail(refreshToken);
-        if (!tokenBlacklistService.isRefreshTokenValid(email, refreshToken)) {
+        if (tokenBlacklistService.isTokenBlackListed(refreshToken)
+                || !tokenBlacklistService.isRefreshTokenValid(email, refreshToken)) {
+            throw new InvalidCredentialsException("Refresh token is invalid or expired");
+        }
+        long bannedAt = tokenBlacklistService.getUserBlacklistTimestamp(email);
+        if (bannedAt > 0 && jwtUtil.extractIssuedAt(refreshToken) < bannedAt) {
             throw new InvalidCredentialsException("Refresh token is invalid or expired");
         }
 

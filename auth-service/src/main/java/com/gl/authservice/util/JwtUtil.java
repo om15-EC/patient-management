@@ -100,6 +100,16 @@ public class JwtUtil {
                 .parseSignedClaims(token);
     }
 
+    public long extractIssuedAt(String token) {
+        return Jwts.parser()
+                .verifyWith(getSigningKey())
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .getIssuedAt()
+                .getTime();
+    }
+
     public String extractEmail(String token) {
         return Jwts.parser()
                 .verifyWith(getSigningKey())

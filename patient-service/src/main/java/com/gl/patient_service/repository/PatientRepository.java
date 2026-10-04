@@ -5,6 +5,9 @@ import com.gl.patient_service.model.PatientStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.UUID;
@@ -20,4 +23,10 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
             String diagnosis, PatientStatus status, Pageable pageable);
     Page<Patient> findByDiagnosis(String diagnosis, Pageable pageable);
     Page<Patient> findByStatus(PatientStatus status, Pageable pageable);
+
+    @Modifying(clearAutomatically = true)
+    @Query("update Patient p set p.status = :failed where p.id = :id and p.status = :pending")
+    int markFailedIfPending(@Param("id") UUID id,
+                            @Param("failed") PatientStatus failed,
+                            @Param("pending") PatientStatus pending);
 }

@@ -6,6 +6,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.stereotype.Service;
 
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -78,6 +79,11 @@ public class TokenBlacklistService {
         String key = REFRESH_TOKEN_PREFIX + email;
         String storedToken = redisTemplate.opsForValue().get(key);
         return refreshToken.equals(storedToken);
+    }
+
+    public Optional<String> getRefreshToken(String email) {
+        String key = REFRESH_TOKEN_PREFIX + email;
+        return Optional.ofNullable(redisTemplate.opsForValue().get(key));
     }
 
     public void deleteRefreshToken(String email) {

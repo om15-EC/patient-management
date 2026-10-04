@@ -124,14 +124,17 @@ services:
   redis:
     image: redis:7-alpine
     container_name: redis
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-dev-redis-password}"]
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-dev-redis-password}
     volumes:
       - redis-data:/data
     networks:
       - internal
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$REDIS_PASSWORD\" ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -158,6 +161,7 @@ services:
       JTW_EXPIRATION: ${JWT_EXPIRATION}
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:-dev-redis-password}
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
       JAVA_TOOL_OPTIONS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"
@@ -185,7 +189,7 @@ services:
       dockerfile: Dockerfile.patient-service
     container_name: patient-service
     ports:
-      - "4000:4000"
+      - "127.0.0.1:4000:4000"
       - "5006:5006"
     environment:
         SPRING_DATASOURCE_URL: jdbc:postgresql://patient-service-db:5432/db
@@ -196,6 +200,8 @@ services:
         BILLING_SERVICE_GRPC_PORT: 9001
         SPRING_DATA_REDIS_HOST: redis
         SPRING_DATA_REDIS_PORT: 6379
+        SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:-dev-redis-password}
+        INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-dev-internal-token}
         MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
         MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
         JAVA_TOOL_OPTIONS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5006"
@@ -306,6 +312,8 @@ services:
       JWT_EXPIRATION: ${JWT_EXPIRATION}
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:-dev-redis-password}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-dev-internal-token}
       JAVA_TOOL_OPTIONS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5009"
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
