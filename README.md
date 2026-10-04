@@ -61,7 +61,7 @@ Infrastructure:
 | Category | Technology |
 |---|---|
 | **Framework** | Spring Boot 3.4.x · Spring Cloud 2024.0.1 |
-| **Language** | Java 21 |
+| **Language** | Java 17 |
 | **Database** | PostgreSQL (DB per service) |
 | **Migrations** | Flyway |
 | **Messaging** | Apache Kafka (KRaft mode) |
@@ -188,7 +188,7 @@ The stack is HTTP on localhost, not TLS. Checks that are actually in the code:
 
 ```bash
 Docker Desktop (with Docker Compose)
-Java 21+
+Java 17+
 Maven 3.9+
 ```
 
